@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Weather App</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #0ea5e9, #1e3a8a); min-height: 100vh; margin: 0; padding: 30px 15px; display: flex; justify-content: center; align-items: flex-start; color: #fff; }
+    .box { background: rgba(255,255,255,.15); width: 100%; max-width: 420px; padding: 24px; border-radius: 14px; text-align: center; }
+    h1 { margin-top: 0; }
+    .row { display: flex; gap: 8px; }
+    input { flex: 1; min-width: 0; padding: 12px; border: none; border-radius: 8px; font-size: 1rem; }
+    button { padding: 12px 16px; border: none; border-radius: 8px; background: #0f172a; color: #fff; font-weight: bold; cursor: pointer; }
+    #recent button { background: rgba(255,255,255,.25); margin: 8px 3px 0; padding: 6px 10px; font-weight: normal; }
+    #result { margin-top: 22px; }
+    .temp { font-size: 3.2rem; font-weight: bold; margin: 6px 0; }
+    .details { display: flex; justify-content: space-around; margin-top: 14px; }
+    .error { color: #fecaca; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Weather App</h1>
+    <div class="row">
+      <input id="city" type="text" placeholder="Enter a city (e.g. Hyderabad)">
+      <button onclick="getWeather()">Search</button>
+    </div>
+    <div id="recent"></div>
+    <div id="result"></div>
+  </div>
+
+  <script>
+    const conditions = {
+      0: "Clear sky", 1: "Mostly clear", 2: "Partly cloudy", 3: "Cloudy",
+      45: "Fog", 48: "Fog", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
+      61: "Light rain", 63: "Rain", 65: "Heavy rain", 71: "Light snow", 73: "Snow", 75: "Heavy snow",
+      80: "Rain showers", 81: "Rain showers", 82: "Heavy showers",
+      95: "Thunderstorm", 96: "Thunderstorm", 99: "Thunderstorm"
+    };
+
+    let recent = JSON.parse(localStorage.getItem("recent")) || [];
+
+    async function getWeather(name) {
+      const city = (name || document.getElementById("city").value).trim();
+      const out = document.getElementById("result");
+      if (!city) {
+        out.innerHTML = '<p class="error">Please enter a city name</p>';
+        return;
+      }
+      out.textContent = "Loading...";
+      try {
+        const geoRes = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=1&name=" + encodeURIComponent(city));
+        if (!geoRes.ok) throw new Error("Geocoding failed");
+        const geo = await geoRes.json();
+        if (!geo.results) {
+          out.innerHTML = '<p class="error">City not found. Check the spelling.</p>';
+          return;
+        }
+        const place = geo.results[0];
+
+        const url = "https://api.open-meteo.com/v1/forecast?latitude=" + place.latitude +
+          "&longitude=" + place.longitude +
+          "&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code";
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Weather request failed");
+        const data = await res.json();
+        const c = data.current;
+
+        out.innerHTML = "<h2></h2><div class='temp'></div><div class='cond'></div>" +
+          "<div class='details'><span class='hum'></span><span class='wind'></span></div>";
+        out.querySelector("h2").textContent = place.name + ", " + place.country;
+        out.querySelector(".temp").textContent = Math.round(c.temperature_2m) + "°C";
+        out.querySelector(".cond").textContent = conditions[c.weather_code] || "Weather code " + c.weather_code;
+        out.querySelector(".hum").textContent = "Humidity: " + c.relative_humidity_2m + "%";
+        out.querySelector(".wind").textContent = "Wind: " + c.wind_speed_10m + " km/h";
+
+        addRecent(place.name);
+      } catch (error) {
+        out.innerHTML = '<p class="error">Could not load weather. Check your internet and try again.</p>';
+      }
+    }
+
+    function addRecent(name) {
+      recent = recent.filter(n => n !== name);
+      recent.unshift(name);
+      recent = recent.slice(0, 5);
+      localStorage.setItem("recent", JSON.stringify(recent));
+      showRecent();
+    }
+
+    function showRecent() {
+      const box = document.getElementById("recent");
+      box.innerHTML = "";
+      recent.forEach(name => {
+        const b = document.createElement("button");
+        b.textContent = name;
+        b.onclick = () => getWeather(name);
+        box.appendChild(b);
+      });
+    }
+
+    document.getElementById("city").addEventListener("keydown", e => {
+      if (e.key === "Enter") getWeather();
+    });
+
+    showRecent();
+  </script>
+</body>
+</html>
